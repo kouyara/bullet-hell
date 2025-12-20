@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bullet_hell_postgres
+    environment:
+      POSTGRES_USER: bullet_user
+      POSTGRES_PASSWORD: bullet_pass
+      POSTGRES_DB: bullet_hell
+      POSTGRES_INITDB_ARGS: "-U bullet_user"
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bullet_user -d bullet_hell"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: bullet_hell_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: bullet_hell_backend
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: postgres://bullet_user:bullet_pass@postgres:5432/bullet_hell
+      REDIS_URL: redis://redis:6379
+      RUST_LOG: debug
+      HOST: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

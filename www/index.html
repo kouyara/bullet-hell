@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bomb dodge game〜爆弾避けゲーム〜</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #gameCanvas {
+            cursor: crosshair;
+        }
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+        .hp-low {
+            animation: blink 0.5s infinite;
+        }
+        @keyframes flash {
+            0%, 100% { background: #1a1a1a; }
+            50% { background: #0f0; color: #000; }
+        }
+        .new-record {
+            animation: flash 0.5s 3;
+        }
+    </style>
+</head>
+<body class="bg-[#111] text-white font-mono flex flex-col items-center justify-center min-h-screen p-5">
+    <h1 class="mb-5 text-2xl text-center">🎮 Bullet Hell Survival - 生存時間チャレンジ</h1>
+    <div id="loading" class="text-lg text-[#0f0]">Loading WebAssembly...</div>
+    
+    <div class="hidden flex-row gap-4 mb-5 justify-center" id="modeSelector">
+        <button class="px-8 py-4 text-base bg-[#0f0] text-black border-2 border-[#0f0] cursor-pointer transition-all duration-200 hover:bg-[#0c0] active:scale-95" id="practiceMode">Practice Mode</button>
+        <button class="px-8 py-4 text-base bg-[#222] text-gray-500 border-2 border-[#444] cursor-pointer transition-all duration-200 hover:bg-[#0f0] hover:text-black hover:border-[#0f0] active:scale-95" id="rankedMode">🏆 Ranked Match</button>
+    </div>
+
+    <div class="hidden text-center p-10 bg-[#1a1a1a] border border-[#333] rounded max-w-lg mx-auto my-5" id="usernameInput">
+        <h2 class="text-2xl text-[#0f0] mb-5">🏆 Ranked Match</h2>
+        <p class="mb-5">プレイヤー名を入力してください</p>
+        <input type="text" id="usernameField" placeholder="プレイヤー名 (3-20文字)" maxlength="20" class="w-full p-4 text-lg mb-5 bg-[#222] text-[#0f0] border border-[#0f0] font-mono">
+        <div class="my-5 p-4 bg-[#222] rounded">
+            <label class="block mb-2.5 text-sm text-gray-500">デバイスタイプ (自動検出):</label>
+            <div id="deviceTypeDisplay" class="text-lg text-[#0f0] font-bold">🖥️ PC</div>
+            <input type="hidden" id="deviceType" value="pc">
+        </div>
+        <button id="confirmUsername" class="bg-[#222] text-[#0f0] border border-[#0f0] px-5 py-2.5 font-mono text-sm cursor-pointer transition-all duration-200 hover:bg-[#0f0] hover:text-black active:scale-95">決定</button>
+        <button id="backFromUsername" class="ml-2.5 bg-[#222] text-[#0f0] border border-[#0f0] px-5 py-2.5 font-mono text-sm cursor-pointer transition-all duration-200 hover:bg-[#0f0] hover:text-black active:scale-95">戻る</button>
+    </div>
+    
+    <div class="block mt-5 p-5 bg-[#1a1a1a] border border-[#333] rounded max-w-3xl" id="gameSettings">
+        <h2 class="text-lg mb-4 text-[#0f0]">⚙️ ゲーム設定</h2>
+        <div class="flex items-center justify-between mb-4 gap-5">
+            <label class="text-sm flex-1">難易度:</label>
+            <select id="difficulty" class="bg-[#222] text-[#0f0] border border-[#0f0] px-3 py-2 font-mono text-sm w-[150px]">
+                <option value="easy">Easy (弾速: 遅い)</option>
+                <option value="normal" selected>Normal (弾速: 普通)</option>
+                <option value="hard">Hard (弾速: 速い)</option>
+                <option value="lunatic">Lunatic (弾速: 超速)</option>
+            </select>
+        </div>
+        <div class="flex items-center justify-between mb-4 gap-5">
+            <label class="text-sm flex-1">体力 (HP):</label>
+            <input type="number" id="maxHp" value="3" min="1" max="10" class="bg-[#222] text-[#0f0] border border-[#0f0] px-3 py-2 font-mono text-sm w-[150px]">
+        </div>
+        <div class="flex items-center justify-between mb-4 gap-5">
+            <label class="text-sm flex-1">弾幕の密度:</label>
+            <select id="bulletDensity" class="bg-[#222] text-[#0f0] border border-[#0f0] px-3 py-2 font-mono text-sm w-[150px]">
+                <option value="low">低 (毎秒 20 弾)</option>
+                <option value="medium" selected>中 (毎秒 50 弾)</option>
+                <option value="high">高 (毎秒 100 弾)</option>
+                <option value="extreme">極 (毎秒 200 弾)</option>
+            </select>
+        </div>
+        <div class="flex items-center justify-between mb-4 gap-5">
+            <label class="text-sm flex-1">弾幕パターン:</label>
+            <select id="bulletPattern" class="bg-[#222] text-[#0f0] border border-[#0f0] px-3 py-2 font-mono text-sm w-[150px]">
+                <option value="random" selected>ランダム</option>
+                <option value="circle">円形</option>
+                <option value="spiral">螺旋</option>
+                <option value="mixed">ミックス</option>
+            </select>
+        </div>
+        <button id="startBtn" class="bg-[#0f0] text-black text-lg px-10 py-4 font-bold font-mono cursor-pointer transition-all duration-200 hover:bg-[#0c0] active:scale-95">ゲーム開始</button>
+        <div id="rankedModeIndicator" class="hidden mt-4 text-yellow-400 font-bold">
+            🏆 Ranked Match Mode - Player: <span id="currentPlayerName"></span>
+        </div>
+    </div>
+
+    <div class="hidden mt-5 p-5 bg-[#1a1a1a] border border-[#333] rounded max-w-3xl max-h-96 overflow-y-auto" id="leaderboard">
+        <h2 class="text-lg text-[#0f0] mb-4">🏆 Leaderboard - <span id="leaderboardDifficulty">Normal</span></h2>
+        <table class="w-full border-collapse">
+            <thead>
+                <tr>
+                    <th class="p-2.5 text-left border-b border-[#333] text-[#0f0] font-bold">Rank</th>
+                    <th class="p-2.5 text-left border-b border-[#333] text-[#0f0] font-bold">Player</th>
+                    <th class="p-2.5 text-left border-b border-[#333] text-[#0f0] font-bold">Time</th>
+                    <th class="p-2.5 text-left border-b border-[#333] text-[#0f0] font-bold">Settings</th>
+                </tr>
+            </thead>
+            <tbody id="leaderboardBody">
+            </tbody>
+        </table>
+        <button id="refreshLeaderboard" class="mt-4 bg-[#222] text-[#0f0] border border-[#0f0] px-5 py-2.5 font-mono text-sm cursor-pointer transition-all duration-200 hover:bg-[#0f0] hover:text-black active:scale-95">Refresh</button>
+    </div>
+
+    <div class="hidden relative inline-block" id="canvasContainer">
+        <canvas id="gameCanvas" width="800" height="600" class="border-2 border-[#333] block"></canvas>
+        <div class="absolute top-2.5 left-2.5 bg-black/70 p-4 rounded text-base pointer-events-none" id="gameStatus">
+            <div class="text-2xl text-[#00FF00] font-bold mb-1" id="survivalTime">0.00s</div>
+            <div class="text-[#FF6666]" id="hpDisplay">HP: 3 / 3</div>
+            <div>弾数: <span id="bulletCount">0</span></div>
+        </div>
+        <div class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/95 p-10 border-4 border-red-600 rounded-lg text-center" id="gameOver">
+            <h2 class="text-4xl text-red-600 mb-5">GAME OVER</h2>
+            <div class="text-5xl text-[#00FF00] mb-5" id="finalTime">0.00s</div>
+            <p>生存時間</p>
+            <div id="rankInfo" class="hidden my-5 p-4 bg-[#222] rounded">
+                <div id="rankDisplay" class="text-xl text-yellow-400 mb-2.5"></div>
+                <div id="personalBest" class="text-[#0f0]"></div>
+            </div>
+            <button id="retryBtn" class="text-lg px-8 py-4 m-2.5 bg-[#222] text-[#0f0] border border-[#0f0] font-mono cursor-pointer transition-all duration-200 hover:bg-[#0f0] hover:text-black active:scale-95">リトライ</button>
+            <button id="backToSettingsBtn" class="text-lg px-8 py-4 m-2.5 bg-[#222] text-[#0f0] border border-[#0f0] font-mono cursor-pointer transition-all duration-200 hover:bg-[#0f0] hover:text-black active:scale-95">設定に戻る</button>
+        </div>
+    </div>
+    
+    <div class="hidden mt-5 text-center max-w-3xl" id="debugControls">
+        <p class="my-1.5 text-sm text-gray-400"><strong>デバッグ:</strong> Space: 円形弾幕発射 | C: クリア</p>
+    </div>
+
+    <div class="mt-5 p-4 bg-[#1a1a1a] border border-[#333] rounded max-w-3xl">
+        <h2 class="text-base mb-2.5 text-[#0f0]">技術仕様</h2>
+        <ul class="list-none text-sm leading-7">
+            <li class="before:content-['▸_'] before:text-[#0f0]"><strong>Struct of Arrays (SoA)</strong>: キャッシュ効率を最大化</li>
+            <li class="before:content-['▸_'] before:text-[#0f0]"><strong>WebAssembly.Memory 共有</strong>: Rust と JavaScript 間でゼロコピー</li>
+            <li class="before:content-['▸_'] before:text-[#0f0]"><strong>Rust 側処理</strong>: 物理演算、衝突判定、状態管理</li>
+            <li class="before:content-['▸_'] before:text-[#0f0]"><strong>JS 側処理</strong>: Canvas 描画と入力のみ</li>
+            <li class="before:content-['▸_'] before:text-[#0f0]"><strong>最大容量</strong>: 100,000 弾まで対応</li>
+        </ul>
+    </div>
+
+    <script type="module" src="./game.js"></script>
+</body>
+</html>
