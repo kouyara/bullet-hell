@@ -4,8 +4,6 @@
   "description": "",
   "main": "game.js",
   "scripts": {
-    "build:css": "tailwindcss -i ./input.css -o ./output.css --minify",
-    "watch:css": "tailwindcss -i ./input.css -o ./output.css --watch",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
