@@ -1,7 +1,4 @@
-version: '3.8'
-
 services:
-  # フロントエンド（本番環境：Nginx で配信）
   frontend:
     image: nginx:alpine
     container_name: bullet_hell_frontend
@@ -9,28 +6,22 @@ services:
       - ./www:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
-      - "${FRONTEND_HOST}:${FRONTEND_PORT}:80"
-    environment:
-      - FRONTEND_HOST=${FRONTEND_HOST}
-      - FRONTEND_PORT=${FRONTEND_PORT}
+      - "${FRONTEND_HOST:-0.0.0.0}:${FRONTEND_PORT:-8000}:80"
     depends_on:
       - backend
     restart: always
 
-  # バックエンド（Rust + Axum）
   backend:
     build:
       context: .
       dockerfile: backend/Dockerfile
     container_name: bullet_hell_backend
-    ports:
-      - "${BACKEND_HOST}:${BACKEND_PORT}:3001"
     expose:
       - "3001"
     environment:
-      DATABASE_URL: postgres://bullet_user:bullet_pass@postgres:5432/bullet_hell
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379
-      RUST_LOG: info
+      RUST_LOG: ${RUST_LOG:-info}
       HOST: 0.0.0.0
       PORT: 3001
     depends_on:
@@ -40,33 +31,27 @@ services:
         condition: service_healthy
     restart: always
 
-  # PostgreSQL（本番環境設定）
   postgres:
     image: postgres:16-alpine
     container_name: bullet_hell_postgres
     environment:
-      POSTGRES_USER: bullet_user
-      POSTGRES_PASSWORD: bullet_pass
-      POSTGRES_DB: bullet_hell
-      POSTGRES_INITDB_ARGS: "-U bullet_user"
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_INITDB_ARGS: "-U ${POSTGRES_USER}"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/migrations:/docker-entrypoint-initdb.d
-    ports:
-      - "5432:5432"
     restart: always
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bullet_user -d bullet_hell"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 30s
       timeout: 10s
       retries: 3
 
-  # Redis（本番環境設定）
   redis:
     image: redis:7-alpine
     container_name: bullet_hell_redis
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru

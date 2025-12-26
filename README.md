@@ -2,14 +2,6 @@
 
 高速な 2D bullet hell / RTS ゲームエンジン。Rust + WebAssembly で大量オブジェクト（2万〜10万弾）をリアルタイム処理。
 
-## 🎯 特徴
-
-- **Struct of Arrays (SoA)**: キャッシュ効率を最大化
-- **WebAssembly.Memory 共有**: Rust と JS 間でゼロコピーデータ転送
-- **Rust でロジック**: 物理演算、衝突判定、状態管理
-- **JS で描画**: Canvas 2D による高速レンダリング
-- **最大 100,000 弾**: 同時処理可能
-
 ## 🚀 セットアップ
 
 ### 必要なツール
@@ -22,37 +14,102 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 brew install wasm-pack
 ```
 
-## 🎮 起動方法
+## 実行方法
 
-### ローカル開発環境
+### ローカル環境での実行方法
 
-#### 1. バックエンド起動（ターミナル1）
-
+バックエンドを起動
 ```bash
-cd /Users/kouya/coding/rust_project
 docker compose up -d
-docker compose ps
 ```
 
-ヘルスチェック:
+バックエンド動作確認:
 ```bash
 curl http://localhost:3000/health
 ```
 
-#### 2. フロントエンド起動（ターミナル2）
-
-初回またはコード変更時:
+フロントエンドを起動
 ```bash
-cd /Users/kouya/coding/rust_project
 wasm-pack build --target web
 rm -rf www/pkg
 cp -r pkg www/
 cd www && python3 -m http.server 8000
 ```
 
-### デプロイメント
+### 本番環境へのデプロイ方法
 
-#### 開発環境での Docker Compose
+ローカルPCからサーバーへファイルを転送
+```bash
+wasm-pack build --target web --release
+rm -rf www/pkg
+cp -r pkg www/
+rsync -avz --delete -e ssh \
+  --exclude='target' \
+  --exclude='/pkg' \
+  --exclude='node_modules' \
+  --exclude='.git' \
+  --exclude='.DS_Store' \
+  --exclude='*.log' \
+  /Users/kouya/coding/rust_project/ \
+  react_web:/opt/bullet-hell/
+```
+
+サーバーへ接続し、以下を実行
+```bash
+cd /opt/bullet-hell/
+# 既存のコンテナを停止
+docker compose -f docker-compose.prod.yml down
+
+# イメージをビルドしてコンテナを起動
+docker compose -f docker-compose.prod.yml up -d --build
+
+# コンテナのステータス確認
+docker compose -f docker-compose.prod.yml ps
+
+# コンテナのログ確認
+docker compose -f docker-compose.prod.yml logs -f
+```
+
+動作確認方法
+```bash
+curl http://localhost:8000/health
+
+curl http://localhost:8000/api/leaderboard?difficulty=normal&device_type=pc&limit=10
+```
+
+本番環境の構成
+```
+ブラウザ (port 8000)
+Nginx (port 80)
+Backend (port 3001)
+PostgreSQL (port 5432)
+Redis (port 6379)
+```
+
+#### dockerコマンド
+
+```bash
+# ログ確認
+docker compose -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.prod.yml logs -f frontend
+
+# サービス再起動
+docker compose -f docker-compose.prod.yml restart backend
+
+# サービス停止
+docker compose -f docker-compose.prod.yml down
+
+# 完全リセット（データベース含む、注意！）
+docker compose -f docker-compose.prod.yml down -v
+
+# データベースのバックアップ
+docker exec bullet_hell_postgres pg_dump -U bullet_user bullet_hell > backup.sql
+
+# データベースの復元
+docker exec -i bullet_hell_postgres psql -U bullet_user bullet_hell < backup.sql
+```
+
+### 開発環境での Docker Compose
 
 ```bash
 cd /Users/kouya/coding/rust_project
@@ -133,38 +190,14 @@ Nginx は以下の機能を提供します：
 - **圧縮**: gzip で自動的にレスポンスを圧縮
 - **SPA ルーティング**: 不正な URL は `index.html` にリダイレクト
 
-#### 環境設定
-
-`.env` ファイルで各環境の設定をカスタマイズ：
-
-```bash
-# Nginx フロントエンド（本番環境）
-FRONTEND_HOST=0.0.0.0
-FRONTEND_PORT=8000
-
-# バックエンド API
-BACKEND_HOST=0.0.0.0
-BACKEND_PORT=3000
-
-# PostgreSQL
-POSTGRES_USER=bullet_user
-POSTGRES_PASSWORD=bullet_pass
-POSTGRES_DB=bullet_hell
-POSTGRES_PORT=5432
-
-# Redis
-REDIS_PORT=6379
-
-# ログレベル
-RUST_LOG=info
-```
+## 🏗️ アーキテクチャ
 
 ### ポート設定
 
 | サービス | ポート | URL |
 |---------|--------|-----|
 | フロントエンド | 8000 | http://localhost:8000 |
-| バックエンド API | 3000 | http://localhost:3000/api |
+| バックエンド API | 3001 | http://localhost:3001/api (内部通信) |
 | PostgreSQL | 5432 | (内部のみ) |
 | Redis | 6379 | (内部のみ) |
 
@@ -439,53 +472,3 @@ docker compose build backend
 wasm-pack build --target web
 rm -rf www/pkg && cp -r pkg www/
 ```
-
-## 🧪 API エンドポイント
-
-```bash
-# ヘルスチェック
-curl http://localhost:3000/health
-
-# スコア投稿（PC用）
-curl -X POST http://localhost:3000/api/scores \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "Player1",
-    "survival_time": 120.5,
-    "difficulty": "normal",
-    "bullet_density": "high",
-    "bullet_pattern": "spiral",
-    "max_hp": 3,
-    "device_type": "pc"
-  }'
-
-# スコア投稿（モバイル用）
-curl -X POST http://localhost:3000/api/scores \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "Player1",
-    "survival_time": 120.5,
-    "difficulty": "normal",
-    "bullet_density": "high",
-    "bullet_pattern": "spiral",
-    "max_hp": 3,
-    "device_type": "mobile"
-  }'
-
-# PC用リーダーボード取得
-curl "http://localhost:3000/api/leaderboard?difficulty=normal&device_type=pc&limit=10"
-
-# モバイル用リーダーボード取得
-curl "http://localhost:3000/api/leaderboard?difficulty=normal&device_type=mobile&limit=10"
-
-# プレイヤー統計
-curl "http://localhost:3000/api/players/Player1/stats"
-```
-
-## 📝 ライセンス
-
-MIT
-
-## 🤝 貢献
-
-Issue や Pull Request 歓迎！

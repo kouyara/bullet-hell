@@ -7,3 +7,9 @@ Cargo.lock
 node_modules/
 www/pkg/
 .env
+# ログファイル
+*.log
+
+# バックアップファイル
+*.sql
+backup_*

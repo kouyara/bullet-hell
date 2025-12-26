@@ -41,6 +41,14 @@ async function run() {
     
     const API_BASE = (() => {
         const hostname = window.location.hostname;
+        const port = window.location.port;
+        
+        // ローカル開発環境（port 8000）の場合、バックエンドサーバー（port 3000）を指定
+        if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
+            if (port === '8000') {
+                return 'http://localhost:3000/api';
+            }
+        }
         
         if (hostname.includes('u-ryukyu.ac.jp')) {
             return '/bullet-hell/api';
@@ -133,6 +141,11 @@ async function run() {
             const difficulty = document.getElementById('difficulty').value;
             const deviceType = currentDeviceType || 'pc';
             const response = await fetch(`${API_BASE}/leaderboard?difficulty=${difficulty}&device_type=${deviceType}&limit=50`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
             const data = await response.json();
             
             const tbody = document.getElementById('leaderboardBody');
@@ -160,6 +173,8 @@ async function run() {
             });
         } catch (error) {
             console.error('Failed to load leaderboard:', error);
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '<tr><td colspan="4" class="p-5 text-center text-red-400">⚠️ バックエンドサーバーに接続できません。<br>Ranked Matchを使用するには、バックエンドサーバーを起動してください。<br>詳細はREADMEを参照してください。</td></tr>';
         }
     }
 
@@ -247,6 +262,10 @@ async function run() {
                     })
                 });
                 
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const result = await response.json();
                 
                 const rankInfo = document.getElementById('rankInfo');
@@ -271,6 +290,14 @@ async function run() {
                 loadLeaderboard();
             } catch (error) {
                 console.error('Failed to submit score:', error);
+                const rankInfo = document.getElementById('rankInfo');
+                const rankDisplay = document.getElementById('rankDisplay');
+                const personalBest = document.getElementById('personalBest');
+                
+                rankInfo.classList.remove('hidden');
+                rankDisplay.textContent = '⚠️ スコアを送信できませんでした';
+                personalBest.textContent = 'バックエンドサーバーに接続できません';
+                personalBest.classList.remove('new-record');
             }
         } else {
             document.getElementById('rankInfo').classList.add('hidden');
