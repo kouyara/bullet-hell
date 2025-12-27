@@ -29,6 +29,32 @@ async function run() {
     let invincibleTimer = 0;
     const invincibleDuration = 1.0;
 
+    let audioContext = null;
+    
+    function initAudioContext() {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+    }
+    
+    function playHitSound() {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(300, audioContext.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(100, audioContext.currentTime + 0.2);
+        
+        gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.2);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.2);
+    }
+
     function detectDeviceType() {
         const userAgent = navigator.userAgent.toLowerCase();
         const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
@@ -43,7 +69,6 @@ async function run() {
         const hostname = window.location.hostname;
         const port = window.location.port;
         
-        // ローカル開発環境（port 8000）の場合、バックエンドサーバー（port 3000）を指定
         if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]') {
             if (port === '8000') {
                 return 'http://localhost:3000/api';
@@ -56,21 +81,6 @@ async function run() {
         
         return '/api';
     })();
-
-    // デバイスタイプ表示を更新
-    function updateDeviceTypeDisplay() {
-        const deviceType = currentDeviceType;
-        const deviceIcon = deviceType === 'pc' ? '🖥️' : '📱';
-        const deviceName = deviceType === 'pc' ? 'PC' : 'Mobile';
-        const displayElement = document.getElementById('deviceTypeDisplay');
-        const inputElement = document.getElementById('deviceType');
-        if (displayElement) {
-            displayElement.textContent = `${deviceIcon} ${deviceName}`;
-        }
-        if (inputElement) {
-            inputElement.value = deviceType;
-        }
-    }
 
     let bulletSpeedMultiplier = 1.0;
     let bulletSpawnRate = 50;
@@ -85,7 +95,6 @@ async function run() {
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('modeSelector').classList.remove('hidden');
     document.getElementById('modeSelector').classList.add('flex');
-    updateDeviceTypeDisplay();
 
     document.getElementById('practiceMode').addEventListener('click', () => {
         isRankedMode = false;
@@ -97,6 +106,15 @@ async function run() {
         document.getElementById('usernameInput').classList.add('hidden');
         document.getElementById('leaderboard').classList.add('hidden');
         document.getElementById('rankedModeIndicator').classList.add('hidden');
+        
+        document.getElementById('difficulty').disabled = false;
+        document.getElementById('maxHp').disabled = false;
+        document.getElementById('bulletDensity').disabled = false;
+        document.getElementById('bulletPattern').disabled = false;
+        
+        document.getElementById('practiceSettingsContainer').classList.remove('hidden');
+        document.getElementById('rankedSettingsContainer').classList.add('hidden');
+        document.getElementById('practiceStartBtn').classList.remove('hidden');
     });
 
     document.getElementById('rankedMode').addEventListener('click', () => {
@@ -105,35 +123,24 @@ async function run() {
         document.getElementById('practiceMode').classList.add('bg-[#222]', 'text-gray-500', 'border-[#444]');
         document.getElementById('rankedMode').classList.remove('bg-[#222]', 'text-gray-500', 'border-[#444]');
         document.getElementById('rankedMode').classList.add('bg-[#0f0]', 'text-black', 'border-[#0f0]');
-        document.getElementById('gameSettings').classList.add('hidden');
-        document.getElementById('usernameInput').classList.remove('hidden');
-        document.getElementById('leaderboard').classList.remove('hidden');
-        loadLeaderboard();
-    });
-
-    document.getElementById('confirmUsername').addEventListener('click', () => {
-        const username = document.getElementById('usernameField').value.trim();
-        if (username.length < 3) {
-            alert('プレイヤー名は3文字以上入力してください');
-            return;
-        }
-        currentUsername = username;
-        // currentDeviceTypeは既に自動検出済み
-        const deviceIcon = currentDeviceType === 'pc' ? '🖥️' : '📱';
-        document.getElementById('currentPlayerName').textContent = `${username} ${deviceIcon}`;
-        document.getElementById('usernameInput').classList.add('hidden');
         document.getElementById('gameSettings').classList.remove('hidden');
+        document.getElementById('leaderboard').classList.remove('hidden');
         document.getElementById('rankedModeIndicator').classList.remove('hidden');
-    });
-
-    document.getElementById('backFromUsername').addEventListener('click', () => {
-        document.getElementById('usernameInput').classList.add('hidden');
-        document.getElementById('leaderboard').classList.add('hidden');
-        isRankedMode = false;
-        document.getElementById('practiceMode').classList.remove('bg-[#222]', 'text-gray-500', 'border-[#444]');
-        document.getElementById('practiceMode').classList.add('bg-[#0f0]', 'text-black', 'border-[#0f0]');
-        document.getElementById('rankedMode').classList.remove('bg-[#0f0]', 'text-black', 'border-[#0f0]');
-        document.getElementById('rankedMode').classList.add('bg-[#222]', 'text-gray-500', 'border-[#444]');
+        
+        document.getElementById('practiceSettingsContainer').classList.add('hidden');
+        document.getElementById('rankedSettingsContainer').classList.remove('hidden');
+        document.getElementById('practiceStartBtn').classList.add('hidden');
+        
+        document.getElementById('difficulty').value = 'normal';
+        document.getElementById('difficulty').disabled = true;
+        document.getElementById('maxHp').value = '3';
+        document.getElementById('maxHp').disabled = true;
+        document.getElementById('bulletDensity').value = 'medium';
+        document.getElementById('bulletDensity').disabled = true;
+        document.getElementById('bulletPattern').value = 'random';
+        document.getElementById('bulletPattern').disabled = true;
+        
+        loadLeaderboard();
     });
 
     async function loadLeaderboard() {
@@ -150,8 +157,6 @@ async function run() {
             
             const tbody = document.getElementById('leaderboardBody');
             tbody.innerHTML = '';
-            
-            document.getElementById('leaderboardDifficulty').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
             
             data.forEach(entry => {
                 const row = document.createElement('tr');
@@ -174,7 +179,7 @@ async function run() {
         } catch (error) {
             console.error('Failed to load leaderboard:', error);
             const tbody = document.getElementById('leaderboardBody');
-            tbody.innerHTML = '<tr><td colspan="4" class="p-5 text-center text-red-400">⚠️ バックエンドサーバーに接続できません。<br>Ranked Matchを使用するには、バックエンドサーバーを起動してください。<br>詳細はREADMEを参照してください。</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="p-5 text-center text-red-400">バックエンドサーバーに接続できません。<br>Ranked Matchを使用するには、バックエンドサーバーを起動してください。<br>詳細はREADMEを参照してください。</td></tr>';
         }
     }
 
@@ -183,17 +188,62 @@ async function run() {
         if (isRankedMode) loadLeaderboard();
     });
 
+    document.getElementById('settingsDetailsBtn').addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.remove('hidden');
+    });
+
+    document.getElementById('closeSettingsModal').addEventListener('click', () => {
+        document.getElementById('settingsModal').classList.add('hidden');
+    });
+
+    document.getElementById('settingsModal').addEventListener('click', (e) => {
+        if (e.target.id === 'settingsModal') {
+            document.getElementById('settingsModal').classList.add('hidden');
+        }
+    });
+
     document.getElementById('startBtn').addEventListener('click', startGame);
     document.getElementById('retryBtn').addEventListener('click', startGame);
+    
+    document.getElementById('submitScore').addEventListener('click', () => {
+        const username = document.getElementById('postGameUsernameField').value.trim();
+        if (username.length < 3) {
+            alert('プレイヤー名は3文字以上入力してください');
+            return;
+        }
+        submitScoreToServer(username);
+    });
+    
+    document.getElementById('skipScore').addEventListener('click', () => {
+        document.getElementById('postGameUsernameInput').classList.add('hidden');
+        document.getElementById('rankInfo').classList.add('hidden');
+    });
+    
+    document.getElementById('postGameUsernameField').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            document.getElementById('submitScore').click();
+        }
+    });
+    
     document.getElementById('backToSettingsBtn').addEventListener('click', () => {
         document.getElementById('canvasContainer').classList.add('hidden');
         document.getElementById('gameSettings').classList.remove('hidden');
         document.getElementById('gameOver').classList.add('hidden');
+        
+        document.querySelector('h1').classList.remove('hidden');
+        document.getElementById('modeSelector').classList.remove('hidden');
+        if (isRankedMode) {
+            document.getElementById('leaderboard').classList.remove('hidden');
+            document.getElementById('rankedModeIndicator').classList.remove('hidden');
+        }
+        
         gameRunning = false;
         engine.clear_bullets();
     });
 
     function startGame() {
+        initAudioContext();
+
         const difficulty = document.getElementById('difficulty').value;
         maxHp = parseInt(document.getElementById('maxHp').value);
         const density = document.getElementById('bulletDensity').value;
@@ -228,6 +278,11 @@ async function run() {
         document.getElementById('canvasContainer').classList.remove('hidden');
         document.getElementById('gameOver').classList.add('hidden');
         
+        document.querySelector('h1').classList.add('hidden');
+        document.getElementById('modeSelector').classList.add('hidden');
+        document.getElementById('leaderboard').classList.add('hidden');
+        document.getElementById('rankedModeIndicator').classList.add('hidden');
+        
         gameRunning = true;
         updateHpDisplay();
     }
@@ -242,64 +297,74 @@ async function run() {
         }
     }
 
+    async function submitScoreToServer(username) {
+        try {
+            const response = await fetch(`${API_BASE}/scores`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    survival_time: survivalTime,
+                    difficulty: document.getElementById('difficulty').value,
+                    bullet_density: document.getElementById('bulletDensity').value,
+                    bullet_pattern: bulletPattern,
+                    max_hp: maxHp,
+                    device_type: currentDeviceType
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            const rankInfo = document.getElementById('rankInfo');
+            const rankDisplay = document.getElementById('rankDisplay');
+            const personalBest = document.getElementById('personalBest');
+            
+            rankInfo.classList.remove('hidden');
+            
+            if (result.rank) {
+                rankDisplay.textContent = `Rank: #${result.rank}`;
+            } else {
+                rankDisplay.textContent = 'Score Recorded!';
+            }
+            
+            if (result.is_personal_best) {
+                personalBest.textContent = 'New Personal Best!';
+                personalBest.classList.add('new-record');
+            } else {
+                personalBest.textContent = '';
+            }
+            
+            document.getElementById('postGameUsernameInput').classList.add('hidden');
+            loadLeaderboard();
+        } catch (error) {
+            console.error('Failed to submit score:', error);
+            const rankInfo = document.getElementById('rankInfo');
+            const rankDisplay = document.getElementById('rankDisplay');
+            const personalBest = document.getElementById('personalBest');
+            
+            rankInfo.classList.remove('hidden');
+            rankDisplay.textContent = 'スコアを送信できませんでした';
+            personalBest.textContent = 'バックエンドサーバーに接続できません';
+            personalBest.classList.remove('new-record');
+            document.getElementById('postGameUsernameInput').classList.add('hidden');
+        }
+    }
+
     async function gameOver() {
         gameRunning = false;
         document.getElementById('finalTime').textContent = survivalTime.toFixed(2) + 's';
         
-        if (isRankedMode && currentUsername) {
-            try {
-                const response = await fetch(`${API_BASE}/scores`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        username: currentUsername,
-                        survival_time: survivalTime,
-                        difficulty: document.getElementById('difficulty').value,
-                        bullet_density: document.getElementById('bulletDensity').value,
-                        bullet_pattern: bulletPattern,
-                        max_hp: maxHp,
-                        device_type: currentDeviceType
-                    })
-                });
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
-                }
-                
-                const result = await response.json();
-                
-                const rankInfo = document.getElementById('rankInfo');
-                const rankDisplay = document.getElementById('rankDisplay');
-                const personalBest = document.getElementById('personalBest');
-                
-                rankInfo.classList.remove('hidden');
-                
-                if (result.rank) {
-                    rankDisplay.textContent = `🏆 Rank: #${result.rank}`;
-                } else {
-                    rankDisplay.textContent = '🏆 Score Recorded!';
-                }
-                
-                if (result.is_personal_best) {
-                    personalBest.textContent = '⭐ New Personal Best!';
-                    personalBest.classList.add('new-record');
-                } else {
-                    personalBest.textContent = '';
-                }
-                
-                loadLeaderboard();
-            } catch (error) {
-                console.error('Failed to submit score:', error);
-                const rankInfo = document.getElementById('rankInfo');
-                const rankDisplay = document.getElementById('rankDisplay');
-                const personalBest = document.getElementById('personalBest');
-                
-                rankInfo.classList.remove('hidden');
-                rankDisplay.textContent = '⚠️ スコアを送信できませんでした';
-                personalBest.textContent = 'バックエンドサーバーに接続できません';
-                personalBest.classList.remove('new-record');
-            }
+        if (isRankedMode) {
+            document.getElementById('postGameUsernameInput').classList.remove('hidden');
+            document.getElementById('rankInfo').classList.add('hidden');
+            document.getElementById('postGameUsernameField').value = '';
+            document.getElementById('postGameUsernameField').focus();
         } else {
+            document.getElementById('postGameUsernameInput').classList.add('hidden');
             document.getElementById('rankInfo').classList.add('hidden');
         }
         
@@ -404,6 +469,7 @@ async function run() {
             if (hit) {
                 currentHp--;
                 updateHpDisplay();
+                playHitSound();
                 if (currentHp <= 0) {
                     gameOver();
                 } else {
@@ -426,13 +492,13 @@ async function run() {
         );
 
         if (gameRunning) {
-            if (!isInvincible || Math.floor(currentTime / 100) % 2 === 0) {
+            if (!isInvincible || Math.floor(currentTime / 150) % 2 === 0) {
                 renderer.drawPlayer(playerX, playerY, playerRadius);
             }
             
             const ctx = renderer.ctx;
-            ctx.strokeStyle = isInvincible ? '#0088FF88' : '#00FF0088';
-            ctx.lineWidth = 1;
+            ctx.strokeStyle = isInvincible ? '#00FFFF' : '#00FF0088';
+            ctx.lineWidth = isInvincible ? 2 : 1;
             ctx.beginPath();
             ctx.arc(playerX, playerY, playerRadius, 0, Math.PI * 2);
             ctx.stroke();

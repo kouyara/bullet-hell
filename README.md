@@ -48,7 +48,7 @@ rsync -avz --delete -e ssh \
   --exclude='.DS_Store' \
   --exclude='*.log' \
   /Users/kouya/coding/rust_project/ \
-  react_web:/opt/bullet-hell/
+  syskan:/opt/bullet-hell/
 ```
 
 サーバーへ接続し、以下を実行
