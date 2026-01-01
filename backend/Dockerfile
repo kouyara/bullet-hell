@@ -38,6 +38,6 @@ WORKDIR /app
 
 COPY --from=builder /app/target/release/bullet_hell_backend /app/bullet_hell_backend
 
-EXPOSE 3000
+EXPOSE 4000
 
 CMD ["/app/bullet_hell_backend"]

@@ -203,6 +203,7 @@ async function run() {
     });
 
     document.getElementById('startBtn').addEventListener('click', startGame);
+    document.getElementById('practiceModeStartBtn').addEventListener('click', startGame);
     document.getElementById('retryBtn').addEventListener('click', startGame);
     
     document.getElementById('submitScore').addEventListener('click', () => {

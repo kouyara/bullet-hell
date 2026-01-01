@@ -48,7 +48,7 @@ rsync -avz --delete -e ssh \
   --exclude='.DS_Store' \
   --exclude='*.log' \
   /Users/kouya/coding/rust_project/ \
-  syskan:/opt/bullet-hell/
+  react_web_syskan:/opt/bullet-hell/
 ```
 
 サーバーへ接続し、以下を実行
@@ -78,7 +78,7 @@ curl http://localhost:8000/api/leaderboard?difficulty=normal&device_type=pc&limi
 ```
 ブラウザ (port 8000)
 Nginx (port 80)
-Backend (port 3001)
+Backend (port 4000)
 PostgreSQL (port 5432)
 Redis (port 6379)
 ```
