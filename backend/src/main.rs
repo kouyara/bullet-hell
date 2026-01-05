@@ -35,22 +35,20 @@ async fn main() -> Result<()> {
     tracing::info!("🚀 Starting Bullet Hell Backend Server");
 
     let db_pool = db::create_pool(&database_url).await?;
+    db::run_migrations(&db_pool).await?;
     
     let redis_client = redis::RedisClient::new(&redis_url).await?;
 
-    // アプリケーション状態
     let state = Arc::new(AppState {
         db: db_pool,
         redis: Arc::new(Mutex::new(redis_client)),
     });
 
-    // CORS設定
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
 
-    // ルーター構築
     let app = Router::new()
         .route("/health", get(handlers::health_check))
         .route("/api/players", post(handlers::create_or_get_player))
@@ -61,7 +59,6 @@ async fn main() -> Result<()> {
         .layer(cors)
         .with_state(state);
 
-    // サーバー起動
     let addr = format!("{}:{}", host, port);
     let listener = tokio::net::TcpListener::bind(&addr).await?;
     

@@ -8,21 +8,64 @@ async function run() {
     const canvas = document.getElementById('gameCanvas');
     const loading = document.getElementById('loading');
     
+    function detectDeviceType() {
+        const userAgent = navigator.userAgent.toLowerCase();
+        const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
+        return isMobile ? 'mobile' : 'pc';
+    }
+    
+    const currentDeviceType = detectDeviceType();
+    
+    if (currentDeviceType === 'mobile') {
+        const titleElement = document.querySelector('h1');
+        titleElement.innerHTML = 'Bullet Hell Survival<br/>〜爆弾避けゲーム〜';
+        
+        document.getElementById('practiceMode').classList.add('mobile-mode-button');
+        document.getElementById('rankedMode').classList.add('mobile-mode-button');
+        
+        const pauseModalInner = document.querySelector('#pauseModal > div');
+        if (pauseModalInner) {
+            pauseModalInner.classList.add('mobile-pause-modal');
+        }
+        
+        const gameOverDiv = document.querySelector('#gameOver');
+        if (gameOverDiv) {
+            gameOverDiv.classList.add('mobile-game-over', 'mobile-game-over-dialog');
+        }
+        
+        const finalTimeDiv = document.getElementById('finalTime');
+        if (finalTimeDiv) {
+            finalTimeDiv.classList.add('mobile-final-time');
+        }
+        
+        document.getElementById('retryBtn').classList.add('mobile-game-over-button');
+        document.getElementById('backToSettingsBtn').classList.add('mobile-game-over-button');
+        
+        canvas.width = window.innerWidth - 30;
+        canvas.height = window.innerHeight - 150;
+    } else {
+        canvas.width = 800;
+        canvas.height = 600;
+    }
+    
     canvas.classList.remove('hidden');
     loading.classList.add('hidden');
 
     const MAX_BULLETS = 100000;
     const engine = new GameEngine(MAX_BULLETS, canvas.width, canvas.height);
     const renderer = new Renderer(canvas);
-    const input = new InputManager(canvas);
+    const input = new InputManager(canvas, currentDeviceType);
 
     let playerX = canvas.width / 2;
     let playerY = canvas.height / 2;
-    const playerRadius = 3;
+    const playerRadius = currentDeviceType === 'mobile' ? 15 : 5;
 
     let gameRunning = false;
+    let gamePaused = false;
     let gameStartTime = 0;
     let survivalTime = 0;
+    let pausedTime = 0;
+    let pauseStartTime = 0;
     let currentHp = 3;
     let maxHp = 3;
     let isInvincible = false;
@@ -55,15 +98,8 @@ async function run() {
         oscillator.stop(audioContext.currentTime + 0.2);
     }
 
-    function detectDeviceType() {
-        const userAgent = navigator.userAgent.toLowerCase();
-        const isMobile = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet/i.test(userAgent);
-        return isMobile ? 'mobile' : 'pc';
-    }
-
     let isRankedMode = false;
     let currentUsername = null;
-    let currentDeviceType = detectDeviceType();
     
     const API_BASE = (() => {
         const hostname = window.location.hostname;
@@ -91,10 +127,29 @@ async function run() {
     let frameCount = 0;
     let fps = 60;
     let fpsUpdateTime = lastTime;
+    let fpsLogged = false;
 
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('modeSelector').classList.remove('hidden');
     document.getElementById('modeSelector').classList.add('flex');
+
+    // 初期状態でRanked Matchを有効化
+    isRankedMode = true;
+    document.getElementById('gameSettings').classList.remove('hidden');
+    document.getElementById('leaderboard').classList.remove('hidden');
+    document.getElementById('rankedModeIndicator').classList.remove('hidden');
+    document.getElementById('practiceSettingsContainer').classList.add('hidden');
+    document.getElementById('rankedSettingsContainer').classList.remove('hidden');
+    document.getElementById('practiceStartBtn').classList.add('hidden');
+    document.getElementById('difficulty').value = 'normal';
+    document.getElementById('difficulty').disabled = true;
+    document.getElementById('maxHp').value = '3';
+    document.getElementById('maxHp').disabled = true;
+    document.getElementById('bulletDensity').value = 'medium';
+    document.getElementById('bulletDensity').disabled = true;
+    document.getElementById('bulletPattern').value = 'random';
+    document.getElementById('bulletPattern').disabled = true;
+    loadLeaderboard();
 
     document.getElementById('practiceMode').addEventListener('click', () => {
         isRankedMode = false;
@@ -154,6 +209,10 @@ async function run() {
             }
             
             const data = await response.json();
+            
+            // デバイスタイプに応じてタイトルを更新
+            const deviceLabel = deviceType === 'mobile' ? 'スマホ版' : 'PC版';
+            document.getElementById('leaderboardDifficulty').textContent = `${deviceLabel}のランキングボード`;
             
             const tbody = document.getElementById('leaderboardBody');
             tbody.innerHTML = '';
@@ -239,7 +298,90 @@ async function run() {
         }
         
         gameRunning = false;
+        gamePaused = false;
         engine.clear_bullets();
+    });
+
+    document.getElementById('pauseBtn').addEventListener('click', () => {
+        if (gameRunning && !gamePaused) {
+            gamePaused = true;
+            pauseStartTime = performance.now();
+            document.getElementById('pauseSurvivalTime').textContent = survivalTime.toFixed(2) + 's';
+            document.getElementById('pauseHpDisplay').textContent = `HP: ${currentHp} / ${maxHp}`;
+            document.getElementById('pauseModal').classList.remove('hidden');
+        }
+    });
+
+    document.getElementById('resumeBtn').addEventListener('click', () => {
+        if (gamePaused) {
+            const pauseDuration = performance.now() - pauseStartTime;
+            pausedTime += pauseDuration;
+            gamePaused = false;
+            document.getElementById('pauseModal').classList.add('hidden');
+        }
+    });
+
+    document.getElementById('backToMenuBtn').addEventListener('click', () => {
+        gamePaused = false;
+        gameRunning = false;
+        document.getElementById('pauseModal').classList.add('hidden');
+        document.getElementById('canvasContainer').classList.add('hidden');
+        document.getElementById('gameSettings').classList.remove('hidden');
+        
+        document.querySelector('h1').classList.remove('hidden');
+        document.getElementById('modeSelector').classList.remove('hidden');
+        if (isRankedMode) {
+            document.getElementById('leaderboard').classList.remove('hidden');
+            document.getElementById('rankedModeIndicator').classList.remove('hidden');
+        }
+        
+        engine.clear_bullets();
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && gameRunning) {
+            if (!gamePaused) {
+                gamePaused = true;
+                pauseStartTime = performance.now();
+                document.getElementById('pauseSurvivalTime').textContent = survivalTime.toFixed(2) + 's';
+                document.getElementById('pauseHpDisplay').textContent = `HP: ${currentHp} / ${maxHp}`;
+                document.getElementById('pauseModal').classList.remove('hidden');
+            } else {
+                const pauseDuration = performance.now() - pauseStartTime;
+                pausedTime += pauseDuration;
+                gamePaused = false;
+                document.getElementById('pauseModal').classList.add('hidden');
+            }
+        }
+    });
+
+    document.getElementById('pauseModal').addEventListener('click', (e) => {
+        if (e.target.id === 'pauseModal' && gamePaused) {
+            const pauseDuration = performance.now() - pauseStartTime;
+            pausedTime += pauseDuration;
+            gamePaused = false;
+            document.getElementById('pauseModal').classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden && gameRunning && !gamePaused) {
+            gamePaused = true;
+            pauseStartTime = performance.now();
+            document.getElementById('pauseSurvivalTime').textContent = survivalTime.toFixed(2) + 's';
+            document.getElementById('pauseHpDisplay').textContent = `HP: ${currentHp} / ${maxHp}`;
+            document.getElementById('pauseModal').classList.remove('hidden');
+        }
+    });
+
+    window.addEventListener('blur', () => {
+        if (gameRunning && !gamePaused) {
+            gamePaused = true;
+            pauseStartTime = performance.now();
+            document.getElementById('pauseSurvivalTime').textContent = survivalTime.toFixed(2) + 's';
+            document.getElementById('pauseHpDisplay').textContent = `HP: ${currentHp} / ${maxHp}`;
+            document.getElementById('pauseModal').classList.remove('hidden');
+        }
     });
 
     function startGame() {
@@ -265,9 +407,15 @@ async function run() {
             extreme: 200
         };
         bulletSpawnRate = densitySettings[density];
+        
+        if (isRankedMode) {
+            bulletSpawnRate = 5;
+        }
 
         currentHp = maxHp;
         survivalTime = 0;
+        pausedTime = 0;
+        gamePaused = false;
         gameStartTime = performance.now();
         isInvincible = true;
         invincibleTimer = 1.0;
@@ -381,7 +529,19 @@ async function run() {
         while (bulletSpawnTimer >= spawnInterval) {
             bulletSpawnTimer -= spawnInterval;
 
-            if (bulletPattern === 'random' || bulletPattern === 'mixed') {
+            let effectiveSpeedMultiplier = bulletSpeedMultiplier;
+            let effectivePattern = bulletPattern;
+            
+            if (isRankedMode) {
+                const timeProgressFactor = 0.3 + (survivalTime / 60) * 1.7;
+                effectiveSpeedMultiplier = bulletSpeedMultiplier * Math.min(timeProgressFactor, 2.0);
+                
+                const patternCycle = Math.floor(survivalTime / 15) % 3;
+                const patternOptions = ['random', 'circle', 'spiral'];
+                effectivePattern = patternOptions[patternCycle];
+            }
+
+            if (effectivePattern === 'random' || effectivePattern === 'mixed') {
                 const edge = Math.floor(Math.random() * 4);
                 let x, y;
                 if (edge === 0) { x = Math.random() * canvas.width; y = 0; }
@@ -392,7 +552,7 @@ async function run() {
                 const dx = playerX - x;
                 const dy = playerY - y;
                 const dist = Math.sqrt(dx * dx + dy * dy);
-                const baseSpeed = (80 + Math.random() * 60) * bulletSpeedMultiplier;
+                const baseSpeed = (80 + Math.random() * 60) * effectiveSpeedMultiplier;
                 const vx = (dx / dist) * baseSpeed;
                 const vy = (dy / dist) * baseSpeed;
                 const radius = 3 + Math.random() * 2;
@@ -400,20 +560,20 @@ async function run() {
                 engine.spawn_bullet(x, y, vx, vy, radius, color);
             }
 
-            if (bulletPattern === 'circle' || (bulletPattern === 'mixed' && Math.random() < 0.3)) {
+            if (effectivePattern === 'circle' || effectivePattern === 'mixed') {
                 if (Math.random() < 0.1) {
                     const x = Math.random() * canvas.width;
                     const y = Math.random() * canvas.height;
-                    const speed = 120 * bulletSpeedMultiplier;
+                    const speed = 120 * effectiveSpeedMultiplier;
                     engine.spawn_circle_pattern(x, y, 16, speed, 3, 0xFFAA00FF);
                 }
             }
 
-            if (bulletPattern === 'spiral' || (bulletPattern === 'mixed' && Math.random() < 0.2)) {
+            if (effectivePattern === 'spiral' || effectivePattern === 'mixed') {
                 if (Math.random() < 0.05) {
                     const x = canvas.width / 2;
                     const y = canvas.height / 2;
-                    const speed = 100 * bulletSpeedMultiplier;
+                    const speed = 100 * effectiveSpeedMultiplier;
                     const offset = performance.now() / 1000;
                     for (let i = 0; i < 24; i++) {
                         const angle = (i / 24) * Math.PI * 2 + offset;
@@ -427,18 +587,18 @@ async function run() {
     }
 
     function gameLoop(currentTime) {
-        const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1); // 秒単位、最大0.1s
+        const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
         lastTime = currentTime;
 
         frameCount++;
-        if (currentTime - fpsUpdateTime >= 1000) {
+        if (!fpsLogged && currentTime - fpsUpdateTime >= 1000) {
+            fpsLogged = true;
             fps = frameCount;
-            frameCount = 0;
-            fpsUpdateTime = currentTime;
+            console.log(`FPS: ${fps}`);
         }
 
-        if (gameRunning) {
-            survivalTime = (currentTime - gameStartTime) / 1000;
+        if (gameRunning && !gamePaused) {
+            survivalTime = (currentTime - gameStartTime - pausedTime) / 1000;
             document.getElementById('survivalTime').textContent = survivalTime.toFixed(2) + 's';
 
             if (isInvincible) {
@@ -448,9 +608,14 @@ async function run() {
                 }
             }
 
+            // プレイヤー移動処理
             const mousePos = input.getMousePos();
             playerX = mousePos.x;
             playerY = mousePos.y;
+            
+            // キャンバス内に制限
+            playerX = Math.max(playerRadius, Math.min(playerX, canvas.width - playerRadius));
+            playerY = Math.max(playerRadius, Math.min(playerY, canvas.height - playerRadius));
 
             spawnBullets(deltaTime);
 
@@ -463,9 +628,11 @@ async function run() {
             }
         }
 
-        engine.update(deltaTime);
+        if (!gamePaused) {
+            engine.update(deltaTime);
+        }
 
-        if (gameRunning && !isInvincible) {
+        if (gameRunning && !isInvincible && !gamePaused) {
             const hit = engine.check_collision(playerX, playerY, playerRadius);
             if (hit) {
                 currentHp--;

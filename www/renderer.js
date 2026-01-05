@@ -54,14 +54,25 @@ class Renderer {
 }
 
 class InputManager {
-    constructor(canvas) {
+    constructor(canvas, deviceType) {
+        this.canvas = canvas;
+        this.deviceType = deviceType;
         this.keys = new Set();
         this.mouseX = 0;
         this.mouseY = 0;
         this.mousePressed = false;
+        
+        this.touchX = canvas.width / 2;
+        this.touchY = canvas.height / 2;
+        this.touchStartX = 0;
+        this.touchStartY = 0;
+        this.isTouching = false;
+        this.lastTouchX = 0;
+        this.lastTouchY = 0;
 
         window.addEventListener('keydown', (e) => this.keys.add(e.key));
         window.addEventListener('keyup', (e) => this.keys.delete(e.key));
+        
         canvas.addEventListener('mousemove', (e) => {
             const rect = canvas.getBoundingClientRect();
             this.mouseX = e.clientX - rect.left;
@@ -69,6 +80,46 @@ class InputManager {
         });
         canvas.addEventListener('mousedown', () => this.mousePressed = true);
         canvas.addEventListener('mouseup', () => this.mousePressed = false);
+        
+        if (deviceType === 'mobile') {
+            canvas.addEventListener('touchstart', (e) => this.handleTouchStart(e), { passive: false });
+            canvas.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+            canvas.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
+        }
+    }
+    
+    handleTouchStart(e) {
+        e.preventDefault();
+        if (e.touches.length > 0) {
+            const rect = this.canvas.getBoundingClientRect();
+            this.touchStartX = e.touches[0].clientX - rect.left;
+            this.touchStartY = e.touches[0].clientY - rect.top;
+            this.lastTouchX = this.touchStartX;
+            this.lastTouchY = this.touchStartY;
+            this.isTouching = true;
+            this.touchX = this.touchStartX;
+            this.touchY = this.touchStartY;
+        }
+    }
+    
+    handleTouchMove(e) {
+        e.preventDefault();
+        if (e.touches.length > 0 && this.isTouching) {
+            const rect = this.canvas.getBoundingClientRect();
+            const currentX = e.touches[0].clientX - rect.left;
+            const currentY = e.touches[0].clientY - rect.top;
+            
+            this.touchX = Math.max(0, Math.min(currentX, this.canvas.width));
+            this.touchY = Math.max(0, Math.min(currentY, this.canvas.height));
+            
+            this.lastTouchX = this.touchX;
+            this.lastTouchY = this.touchY;
+        }
+    }
+    
+    handleTouchEnd(e) {
+        e.preventDefault();
+        this.isTouching = false;
     }
 
     isKeyPressed(key) {
@@ -76,7 +127,25 @@ class InputManager {
     }
 
     getMousePos() {
+        if (this.deviceType === 'mobile') {
+            return { x: this.touchX, y: this.touchY };
+        }
         return { x: this.mouseX, y: this.mouseY };
+    }
+
+    getTargetPos() {
+        if (this.deviceType === 'mobile') {
+            return { x: this.touchX, y: this.touchY };
+        }
+        return { x: this.mouseX, y: this.mouseY };
+    }
+
+    isMobileAndTouching() {
+        return this.deviceType === 'mobile' && this.isTouching;
+    }
+    
+    hasTargetPos() {
+        return this.deviceType === 'mobile';
     }
 
     isMousePressed() {

@@ -19,6 +19,7 @@ pub async fn health_check() -> &'static str {
     "OK"
 }
 
+// 既存プレイヤーの取得または新規作成
 pub async fn create_or_get_player(
     State(state): State<Arc<AppState>>,
     Json(req): Json<CreatePlayerRequest>,
@@ -46,6 +47,7 @@ pub async fn create_or_get_player(
     Ok(Json(player))
 }
 
+// スコアをDBとRedisに保存する
 pub async fn submit_score(
     State(state): State<Arc<AppState>>,
     Json(req): Json<SubmitScoreRequest>,
@@ -123,6 +125,7 @@ pub async fn submit_score(
     }))
 }
 
+// ランキングボードを取得
 pub async fn get_leaderboard(
     State(state): State<Arc<AppState>>,
     Query(query): Query<LeaderboardQuery>,
@@ -144,6 +147,7 @@ pub async fn get_leaderboard(
     Ok(Json(entries))
 }
 
+// プレイヤーのスコア一覧を取得
 pub async fn get_player_scores(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(username): axum::extract::Path<String>,
@@ -163,6 +167,7 @@ pub async fn get_player_scores(
     Ok(Json(scores))
 }
 
+// プレイヤー統計を取得
 pub async fn get_player_stats(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(username): axum::extract::Path<String>,

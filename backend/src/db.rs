@@ -14,6 +14,10 @@ pub async fn create_pool(database_url: &str) -> Result<PgPool> {
 }
 
 pub async fn run_migrations(pool: &PgPool) -> Result<()> {
-    tracing::info!("Database migrations skipped (handled by docker-entrypoint)");
+    sqlx::migrate!("./migrations")
+        .run(pool)
+        .await?;
+
+    tracing::info!("Database migrations completed successfully");
     Ok(())
 }
