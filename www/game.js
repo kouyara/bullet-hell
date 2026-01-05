@@ -129,6 +129,13 @@ async function run() {
     let fpsUpdateTime = lastTime;
     let fpsLogged = false;
 
+    let perfMonitorEnabled = false;
+    let perfWasmTime = 0;
+    let perfDrawTime = 0;
+    let perfCollisionCount = 0;
+    let perfFrameTime = 16.7;
+    let perfFpsValues = [];
+
     document.getElementById('loading').classList.add('hidden');
     document.getElementById('modeSelector').classList.remove('hidden');
     document.getElementById('modeSelector').classList.add('flex');
@@ -396,7 +403,8 @@ async function run() {
             easy: 0.7,
             normal: 1.0,
             hard: 1.5,
-            lunatic: 2.0
+            lunatic: 2.0,
+            insane: 3.0  // WebAssembly極限負荷試験モード
         };
         bulletSpeedMultiplier = difficultySettings[difficulty];
 
@@ -404,7 +412,8 @@ async function run() {
             low: 20,
             medium: 50,
             high: 100,
-            extreme: 200
+            extreme: 200,
+            insane: 500  // 毎秒500弾 - Rust/Wasmの限界テスト
         };
         bulletSpawnRate = densitySettings[density];
         
@@ -431,6 +440,14 @@ async function run() {
         document.getElementById('modeSelector').classList.add('hidden');
         document.getElementById('leaderboard').classList.add('hidden');
         document.getElementById('rankedModeIndicator').classList.add('hidden');
+        
+        if (!isRankedMode || difficulty === 'insane' || density === 'insane') {
+            perfMonitorEnabled = true;
+            document.getElementById('perfMonitor').classList.remove('hidden');
+        } else {
+            perfMonitorEnabled = false;
+            document.getElementById('perfMonitor').classList.add('hidden');
+        }
         
         gameRunning = true;
         updateHpDisplay();
@@ -587,14 +604,19 @@ async function run() {
     }
 
     function gameLoop(currentTime) {
+        const loopStartTime = performance.now();
         const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.1);
         lastTime = currentTime;
 
         frameCount++;
-        if (!fpsLogged && currentTime - fpsUpdateTime >= 1000) {
-            fpsLogged = true;
+        
+        if (currentTime - fpsUpdateTime >= 1000) {
             fps = frameCount;
-            console.log(`FPS: ${fps}`);
+            frameCount = 0;
+            fpsUpdateTime = currentTime;
+            if (!perfMonitorEnabled) {
+                console.log(`FPS: ${fps}`);
+            }
         }
 
         if (gameRunning && !gamePaused) {
@@ -628,11 +650,20 @@ async function run() {
             }
         }
 
+        // Wasm処理時間測定
+        const wasmStartTime = performance.now();
         if (!gamePaused) {
             engine.update(deltaTime);
         }
+        const wasmEndTime = performance.now();
+        perfWasmTime = wasmEndTime - wasmStartTime;
 
+        // 衝突判定時間測定
+        const collisionStartTime = performance.now();
+        perfCollisionCount = 0;
         if (gameRunning && !isInvincible && !gamePaused) {
+            const bulletCount = engine.get_bullet_count();
+            perfCollisionCount = bulletCount;
             const hit = engine.check_collision(playerX, playerY, playerRadius);
             if (hit) {
                 currentHp--;
@@ -645,8 +676,13 @@ async function run() {
                     invincibleTimer = invincibleDuration;
                 }
             }
+        } else if (gameRunning) {
+            perfCollisionCount = engine.get_bullet_count();
         }
+        const collisionEndTime = performance.now();
+        const perfCollisionTime = collisionEndTime - collisionStartTime;
 
+        const drawStartTime = performance.now();
         renderer.clear();
         
         renderer.drawBullets(
@@ -671,8 +707,22 @@ async function run() {
             ctx.arc(playerX, playerY, playerRadius, 0, Math.PI * 2);
             ctx.stroke();
         }
+        const drawEndTime = performance.now();
+        perfDrawTime = drawEndTime - drawStartTime;
 
-        document.getElementById('bulletCount').textContent = engine.get_bullet_count();
+        const bulletCount = engine.get_bullet_count();
+        document.getElementById('bulletCount').textContent = bulletCount;
+
+        if (perfMonitorEnabled && frameCount % 10 === 0) {
+            const loopEndTime = performance.now();
+            perfFrameTime = loopEndTime - loopStartTime;
+
+            document.getElementById('perfFps').textContent = fps.toFixed(1);
+            document.getElementById('perfFrameTime').textContent = perfFrameTime.toFixed(2);
+            document.getElementById('perfWasmTime').textContent = perfWasmTime.toFixed(2);
+            document.getElementById('perfDrawTime').textContent = perfDrawTime.toFixed(2);
+            document.getElementById('perfTotalBullets').textContent = bulletCount;
+        }
 
         requestAnimationFrame(gameLoop);
     }

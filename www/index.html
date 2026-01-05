@@ -99,6 +99,7 @@
                     <option value="normal" selected>Normal (弾速: 普通)</option>
                     <option value="hard">Hard (弾速: 速い)</option>
                     <option value="lunatic">Lunatic (弾速: 超速)</option>
+                    <option value="insane" class="text-red-500">🔥 Insane (極限負荷試験)</option>
                 </select>
             </div>
             <div class="flex items-center justify-between mb-4 gap-5">
@@ -112,6 +113,7 @@
                     <option value="medium" selected>中 (毎秒 50 弾)</option>
                     <option value="high">高 (毎秒 100 弾)</option>
                     <option value="extreme">極 (毎秒 200 弾)</option>
+                    <option value="insane" class="text-red-500">🔥 狂気 (毎秒 500 弾)</option>
                 </select>
             </div>
             <div class="flex items-center justify-between mb-4 gap-5">
@@ -184,6 +186,14 @@
             <div class="text-2xl text-[#00FF00] font-bold mb-1" id="survivalTime">0.00s</div>
             <div class="text-[#FF6666]" id="hpDisplay">HP: 3 / 3</div>
             <div>弾数: <span id="bulletCount">0</span></div>
+        </div>
+        <div class="hidden absolute top-2.5 right-2.5 bg-black/90 p-3 rounded text-xs font-mono pointer-events-none border border-yellow-500" id="perfMonitor">
+            <div class="text-yellow-400 font-bold mb-2">Performance Monitor</div>
+            <div class="text-green-400">FPS: <span id="perfFps">60</span></div>
+            <div class="text-blue-400">Frame: <span id="perfFrameTime">16.7</span>ms</div>
+            <div class="text-purple-400">Wasm: <span id="perfWasmTime">0.0</span>ms</div>
+            <div class="text-orange-400">Draw: <span id="perfDrawTime">0.0</span>ms</div>
+            <div class="text-cyan-400">Bullets: <span id="perfTotalBullets">0</span></div>
         </div>
         <div class="hidden absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-black/95 p-10 border-4 border-red-600 rounded-lg text-center" id="gameOver">
             <h2 class="text-4xl text-red-600 mb-5">GAME OVER</h2>
